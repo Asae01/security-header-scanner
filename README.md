@@ -145,6 +145,35 @@ The grading logic lives in `ScanReport.overall_grade` inside `scanner.py` -
 it's a simple weighted percentage, not a cryptographic risk score, so treat
 the letter grade as a rough guide rather than an authoritative rating.
 
+## A note on results that differ from your browser
+
+While testing this tool, I found that scanning my own site
+(`luxicon.sothebyasae.workers.dev`, a Cloudflare Workers deployment)
+returned a 404 from this tool and from `curl`, while the site loaded
+perfectly in a normal browser.
+
+Digging into it, this wasn't a bug in the scanner. Some hosting setups
+(Cloudflare Workers/Pages included) serve different responses depending on
+*how* a request is made, not just the URL:
+
+- A plain script request (Python's `requests`, `curl`) can be routed
+  differently than real browser navigation, especially on sites using
+  internal asset-serving logic or SPA routing.
+- In my case, a `curl -I` (HEAD request) returned a plain 404, while a full
+  `curl` GET request returned Cloudflare error 1042 - which specifically
+  means the Worker's own code attempted an internal fetch that Cloudflare
+  blocks, not that the page doesn't exist.
+- Changing the tool's User-Agent to mimic a browser did **not** fix this,
+  which ruled out simple bot-blocking as the cause.
+
+**The takeaway:** a scanner like this one shows you what an automated,
+non-browser client sees - which is a legitimate and useful thing to know,
+since real-world bots, crawlers, and monitoring tools are non-browser
+clients too. But it is not automatically the same as what a human visitor
+sees. If a scan result looks wrong, the right next step is to compare it
+against the site's own server/Worker logs and a plain `curl` request before
+assuming the tool is broken or the site is broken.
+
 ## Project structure
 
 ```

@@ -62,6 +62,17 @@ SENSITIVE_PATHS = [
 DEFAULT_TIMEOUT = 10
 CERT_WARNING_DAYS = 30  # warn if the SSL cert expires within this many days
 
+# Some CDNs/WAFs (Cloudflare included) serve different responses - or block
+# the request outright - when they detect a non-browser User-Agent like the
+# requests library's default ("python-requests/x.x"). Identifying as a
+# normal browser gets a more accurate picture of what real visitors see.
+REQUEST_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36"
+    )
+}
+
 
 # --------------------------------------------------------------------------
 # Data structures: these just hold results in an organized way so the
@@ -163,7 +174,7 @@ def check_https_enforced(url: str, timeout: int) -> bool:
     parsed = urlparse(url)
     http_url = f"http://{parsed.netloc}{parsed.path}"
     try:
-        resp = requests.get(http_url, timeout=timeout, allow_redirects=True)
+        resp = requests.get(http_url, timeout=timeout, allow_redirects=True, headers=REQUEST_HEADERS)
         return resp.url.startswith("https://")
     except requests.RequestException:
         # http:// didn't even respond - not a downgrade risk.
@@ -176,7 +187,7 @@ def check_sensitive_paths(base_url: str, timeout: int) -> list[PathResult]:
     for path in SENSITIVE_PATHS:
         full_url = base_url + path
         try:
-            resp = requests.get(full_url, timeout=timeout, allow_redirects=False)
+            resp = requests.get(full_url, timeout=timeout, allow_redirects=False, headers=REQUEST_HEADERS)
             exposed = resp.status_code == 200
             results.append(PathResult(path=path, exposed=exposed, status_code=resp.status_code))
         except requests.RequestException:
@@ -221,7 +232,7 @@ def run_scan(url: str, timeout: int = DEFAULT_TIMEOUT) -> ScanReport:
     url = normalize_url(url)
 
     try:
-        resp = requests.get(url, timeout=timeout, allow_redirects=True)
+        resp = requests.get(url, timeout=timeout, allow_redirects=True, headers=REQUEST_HEADERS)
     except requests.RequestException as e:
         print(f"[ERROR] Could not reach {url}: {e}", file=sys.stderr)
         sys.exit(1)
